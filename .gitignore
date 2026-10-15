@@ -1,0 +1,16 @@
+bin/
+obj/
+.vs/
+.idea/
+*.user
+*.suo
+*.DotSettings.user
+TestResults/
+*.log
+logs/
+publish/
+# Never commit secrets
+appsettings.Production.json
+appsettings.Local.json
+*.pfx
+.env

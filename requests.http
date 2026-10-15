@@ -1,0 +1,53 @@
+# Auth requests for VS Code (REST Client), JetBrains Rider and Visual Studio.
+# Start the API first:  dotnet run --project src/StarterKit.Api --launch-profile http
+#
+# Run "Register" (or "Login"), then the requests below reuse its tokens via the named request "login".
+# Chained values use JSONPath: {{login.response.body.$.accessToken}}
+
+@host = http://localhost:5080
+@email = dev@example.com
+@password = Passw0rdOK
+
+### Health (anonymous)
+GET {{host}}/health
+
+### Register
+POST {{host}}/api/auth/register
+Content-Type: application/json
+
+{
+  "email": "{{email}}",
+  "password": "{{password}}",
+  "displayName": "Dev User"
+}
+
+### Login
+# @name login
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{email}}",
+  "password": "{{password}}"
+}
+
+### Current user (needs the access token from "Login")
+GET {{host}}/api/auth/me
+Authorization: Bearer {{login.response.body.$.accessToken}}
+
+### Refresh (rotates the refresh token; the old one becomes invalid)
+# @name refresh
+POST {{host}}/api/auth/refresh
+Content-Type: application/json
+
+{
+  "refreshToken": "{{login.response.body.$.refreshToken}}"
+}
+
+### Logout (revokes the refresh token)
+POST {{host}}/api/auth/logout
+Content-Type: application/json
+
+{
+  "refreshToken": "{{login.response.body.$.refreshToken}}"
+}

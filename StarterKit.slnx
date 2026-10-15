@@ -1,0 +1,18 @@
+<Solution>
+  <Folder Name="/Solution Items/">
+    <File Path=".editorconfig" />
+    <File Path="Directory.Build.props" />
+    <File Path="Directory.Packages.props" />
+    <File Path="global.json" />
+    <File Path="README.md" />
+    <File Path="requests.http" />
+    <File Path="docs/package-decisions.md" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/StarterKit.Api/StarterKit.Api.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/StarterKit.UnitTests/StarterKit.UnitTests.csproj" />
+    <Project Path="tests/StarterKit.IntegrationTests/StarterKit.IntegrationTests.csproj" />
+  </Folder>
+</Solution>
