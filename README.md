@@ -1,196 +1,305 @@
-# StarterKit: ASP.NET Core Web API template
+# StarterKit — ASP.NET Core Web API
 
-A reusable, production-minded **.NET 10** Web API starter. All boilerplate is already written (validation, error
-handling, logging, authentication, security, pagination, auditing, endpoint registration, tests, docs and a one-command
-setup) so you only add your own features.
+A reusable **.NET 10 Web API starter template** with common API infrastructure already set up.
 
-> **Status:** generated without a .NET SDK, so it has **not been compiled or tested yet**. Run the setup script first;
-> if the compiler reports anything, fix it before building on top. Details in `docs/package-decisions.md`.
+Use it to start new backend projects without rebuilding the same foundation every time.
 
-## One-command setup
+## What's Included?
 
-| OS / shell | Command |
+| Feature | What it does |
 |---|---|
-| Windows (PowerShell) | `.\setup.ps1` |
-| Windows (cmd / double-click) | `setup.cmd` |
+| Authentication | Register, login, JWT access tokens, and refresh tokens |
+| Validation | Validate incoming requests |
+| Error handling | Return consistent API error responses |
+| Database | Entity Framework Core with SQL Server |
+| Logging | Structured logging with Serilog |
+| Security | Authorization, rate limiting, security headers, and CORS configuration |
+| Pagination | Reusable paginated responses |
+| Testing | Unit tests and integration tests |
+| API documentation | OpenAPI documentation |
+| Setup scripts | Automate the initial setup |
+
+**Important:** The template has not been compiled or tested yet. Run the setup script and resolve any errors before using it as the foundation for a real project.
+
+See [`docs/package-decisions.md`](docs/package-decisions.md) for package choices and configuration details.
+
+---
+
+## 1. Requirements
+
+Before you start, install:
+
+- [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)
+- Git
+- SQL Server, or a SQL Server container if you're using macOS or Linux
+
+**Note:** The default Development database uses SQL Server LocalDB, which is intended for Windows.
+
+---
+
+## 2. Run the Project
+
+Choose the command for your operating system.
+
+| Operating system | Command |
+|---|---|
+| Windows PowerShell | `.\setup.ps1` |
+| Windows CMD | `setup.cmd` |
 | macOS / Linux | `./setup.sh` |
 
-Options: `-SkipTests` / `--skip-tests` (skip the test step) and `-Run` / `--run` (start the API afterwards).
+On macOS or Linux, make the script executable first if needed:
 
-The script is idempotent. It: (1) checks the .NET SDK >= 10, (2) restores local tools (`dotnet-ef`), (3) restores
-packages, (4) builds, (5) generates a random 64-byte `Jwt:Key` into **user-secrets** if missing, (6) creates the
-`InitialCreate` migration if `Persistence/Migrations` does not exist, (7) runs the tests, (8) prints next steps.
-
-Development uses **SQL Server LocalDB** (Windows). On macOS/Linux set the connection string to a SQL Server container:
-`dotnet user-secrets set "ConnectionStrings:DefaultConnection" "<connection string>" --project src/StarterKit.Api`.
-
-Then: `dotnet run --project src/StarterKit.Api --launch-profile http` and open <http://localhost:5080/swagger>.
-
-## Structure
-
-```
-StarterKit.slnx
-global.json  Directory.Build.props  Directory.Packages.props  .editorconfig  .gitignore
-.config/dotnet-tools.json        local dotnet-ef
-setup.ps1  setup.cmd  setup.sh   one-command bootstrap
-requests.http                    auth requests (VS Code REST Client / Rider / Visual Studio)
-docs/package-decisions.md        package choices and rationale
-src/StarterKit.Api/
-  Auth/                          Identity, JWT, refresh tokens, auth endpoints
-  Common/Endpoints|Validation|Errors|Middleware|Pagination|Security
-  Domain/                        BaseEntity, AppUser, RefreshToken
-  Persistence/                   DbContext, configurations, interceptor, seeder
-  Features/                      <- your code goes here (empty on purpose)
-tests/StarterKit.UnitTests/
-tests/StarterKit.IntegrationTests/
+```bash
+chmod +x setup.sh
+./setup.sh
 ```
 
-## Adding a feature (Products example)
+The setup script automatically:
 
-1. **Entity** in `Domain/` (or inside your feature folder):
+1. Checks the .NET SDK version.
+2. Restores local tools and NuGet packages.
+3. Builds the solution.
+4. Generates a JWT signing key in User Secrets if needed.
+5. Creates the initial database migration when missing.
+6. Runs the tests.
+7. Prints the next steps.
 
-   ```csharp
-   public class Product : BaseEntity
-   {
-       public string Name { get; set; } = string.Empty;
-       public decimal Price { get; set; }
-   }
-   ```
+The script can be run again without intentionally repeating completed setup steps.
 
-2. **Mapping**: add `public DbSet<Product> Products => Set<Product>();` to `AppDbContext` and a configuration:
+### Configure SQL Server on macOS or Linux
 
-   ```csharp
-   public sealed class ProductConfiguration : BaseEntityConfiguration<Product>
-   {
-       protected override void ConfigureEntity(EntityTypeBuilder<Product> builder)
-       {
-           builder.Property(p => p.Name).IsRequired().HasMaxLength(200);
-           builder.Property(p => p.Price).HasPrecision(18, 2);
-       }
-   }
-   ```
+Set your SQL Server connection string:
 
-3. **Migration**: `dotnet ef migrations add AddProducts --project src/StarterKit.Api --output-dir Persistence/Migrations`
-   (set `ASPNETCORE_ENVIRONMENT=Development` so the Development connection string is used).
+```bash
+dotnet user-secrets set \
+  "ConnectionStrings:DefaultConnection" \
+  "<your-connection-string>" \
+  --project src/StarterKit.Api
+```
 
-4. **Contracts + validator + endpoint** in `Features/Products/`:
+Replace `<your-connection-string>` with your actual connection string.
 
-   ```csharp
-   public sealed record CreateProductRequest(string Name, decimal Price);
-   public sealed record ProductResponse(Guid Id, string Name, decimal Price);
+### Start the API
 
-   public sealed class CreateProductRequestValidator : AbstractValidator<CreateProductRequest>
-   {
-       public CreateProductRequestValidator()
-       {
-           RuleFor(x => x.Name).NotEmpty().MaximumLength(200);
-           RuleFor(x => x.Price).GreaterThan(0);
-       }
-   }
+```bash
+dotnet run --project src/StarterKit.Api --launch-profile http
+```
 
-   public sealed class ProductEndpoints : IEndpoint
-   {
-       public void Map(IEndpointRouteBuilder app)
-       {
-           var group = app.MapGroup("/api/products").WithTags("Products");
+Open the API documentation:
 
-           group.MapGet("/", async (AppDbContext db, int? page, int? pageSize, CancellationToken ct) =>
-               Results.Ok(await db.Products
-                   .OrderBy(p => p.Name).ThenBy(p => p.Id)          // paging requires a stable order
-                   .Select(p => new ProductResponse(p.Id, p.Name, p.Price))
-                   .ToPagedResultAsync(page, pageSize, ct)));
+**http://localhost:5080/swagger**
 
-           group.MapPost("/", async (CreateProductRequest request, AppDbContext db, CancellationToken ct) =>
-               {
-                   var product = new Product { Name = request.Name, Price = request.Price };
-                   db.Products.Add(product);
-                   await db.SaveChangesAsync(ct);
-                   return Results.Created($"/api/products/{product.Id}",
-                       new ProductResponse(product.Id, product.Name, product.Price));
-               })
-               .WithValidation<CreateProductRequest>();
+---
 
-           group.MapDelete("/{id:guid}", async (Guid id, AppDbContext db, CancellationToken ct) =>
-               {
-                   var product = await db.Products.FindAsync([id], ct)
-                       ?? throw new NotFoundException($"Product {id} was not found.");
-                   db.Products.Remove(product);
-                   await db.SaveChangesAsync(ct);
-                   return Results.NoContent();
-               })
-               .RequireAuthorization(Policies.AdminOnly);
-       }
-   }
-   ```
+## 3. Project Structure
 
-No `Program.cs` change is needed: endpoints and validators are discovered by assembly scanning. Throw `NotFoundException`,
-`ConflictException`, `ForbiddenException` or `AppException` and the global handler returns an RFC 7807 response.
+You don't need to understand every file before getting started.
 
-## Security defaults
+```text
+StarterKit/
+├── src/
+│   └── StarterKit.Api/
+│       ├── Auth/          # Registration, login, tokens
+│       ├── Common/        # Validation, errors, security, pagination
+│       ├── Domain/        # Core entities and user models
+│       ├── Persistence/   # Database, configurations, migrations
+│       └── Features/      # Add your application features here
+│
+├── tests/
+│   ├── StarterKit.UnitTests/
+│   └── StarterKit.IntegrationTests/
+│
+├── docs/                  # Guides and package decisions
+├── setup.sh               # macOS / Linux setup
+├── setup.ps1              # Windows PowerShell setup
+├── setup.cmd              # Windows CMD setup
+└── StarterKit.slnx
+```
 
-- **Everything requires authentication** unless the endpoint calls `.AllowAnonymous()` (fallback authorization policy).
-  Health (`/health`) and the auth endpoints are anonymous. `AdminOnly` is available via `.RequireAuthorization(Policies.AdminOnly)`.
-- **`Jwt__Key` in production** must come from an environment variable or secret store. The app refuses to start with a
-  missing or short (< 32 chars) key. Never commit a key.
-- **CORS is empty by default** (nothing allowed). Allow origins with `Cors:AllowedOrigins:0`, `Cors:AllowedOrigins:1`, ...
-  (or `Cors__AllowedOrigins__0` as environment variables).
-- **Optional seeded admin:** set `Seed:AdminEmail` and `Seed:AdminPassword` (user-secrets or env vars) together with
-  `Database:SeedOnStartup=true`. The seeder is idempotent.
-- **Roles must exist before the first registration.** `Database:SeedOnStartup` creates `Admin` and `User` (true only in
-  Development). In production run the seeder once (set the flag for the first deployment) or insert the roles yourself,
-  otherwise `POST /api/auth/register` fails when it assigns the `User` role.
-- **Migrations in production:** run them in your deployment pipeline (for example `dotnet ef migrations bundle`), not on
-  startup with several instances. `Database:MigrateOnStartup` is true only in Development.
-- **Behind a reverse proxy / load balancer** add forwarded headers so rate limiting and logs see the real client IP, and
-  restrict which proxies are trusted:
+### Where should your code go?
 
-  ```csharp
-  builder.Services.Configure<ForwardedHeadersOptions>(o =>
-      o.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto);
-  // ... and app.UseForwardedHeaders(); as the first middleware. Configure KnownProxies/KnownNetworks.
-  ```
-- Response headers: `X-Content-Type-Options`, `X-Frame-Options: DENY`, `Referrer-Policy`, and a strict CSP outside
-  Development; HSTS + HTTPS redirection outside Development/Testing.
-- Rate limiting: global per-IP fixed window plus a stricter `auth` policy (`RateLimiting:*` settings).
+- **Features/** — products, orders, profiles, and other business features.
+- **Domain/** — entities and core business models.
+- **Persistence/** — database configuration and migrations.
+- **Common/** — reusable infrastructure shared across features.
+- **Auth/** — authentication and token management.
+- **tests/** — automated tests.
 
-## Auth endpoints
+---
 
-| Method | Route | Access | Description |
-|---|---|---|---|
-| POST | `/api/auth/register` | anonymous, `auth` rate limit | Create an account; returns tokens (201) |
-| POST | `/api/auth/login` | anonymous, `auth` rate limit | Returns access + refresh token |
-| POST | `/api/auth/refresh` | anonymous, `auth` rate limit | Rotates the refresh token (single use) |
-| POST | `/api/auth/logout` | anonymous, `auth` rate limit | Revokes the given refresh token (204) |
-| GET | `/api/auth/me` | authenticated | Current user and roles |
+## 4. Add Your First Feature
 
-Reusing a revoked refresh token revokes all of that user's refresh tokens. Use `requests.http` to try the flow
-(the Swagger "Authorize" button is not configured; see `docs/package-decisions.md`).
+For example, let's add a `Products` API.
 
-## Verification commands
+The feature will support:
+
+- Creating a product.
+- Listing products with pagination.
+- Deleting a product.
+
+### Step 1: Create the entity
+
+Add a `Product.cs` file under `Domain/`:
+
+```csharp
+public class Product : BaseEntity
+{
+    public string Name { get; set; } = string.Empty;
+    public decimal Price { get; set; }
+}
+```
+
+### Step 2: Register the entity in the database
+
+Add the following property to `AppDbContext`:
+
+```csharp
+public DbSet<Product> Products => Set<Product>();
+```
+
+Create a configuration for the entity and define its database constraints.
+
+### Step 3: Create a migration
+
+```bash
+dotnet ef migrations add AddProducts \
+  --project src/StarterKit.Api \
+  --output-dir Persistence/Migrations
+```
+
+Ensure the correct Development connection string is configured before applying migrations or running the application.
+
+### Step 4: Create the API endpoints
+
+Create a feature folder:
+
+```text
+Features/
+└── Products/
+    ├── ProductEndpoints.cs
+    ├── CreateProductRequest.cs
+    ├── CreateProductRequestValidator.cs
+    └── ProductResponse.cs
+```
+
+Implement your endpoints, request validation, and response models.
+
+The starter kit discovers endpoint implementations and validators automatically, so you shouldn't need to modify `Program.cs` for a normal feature.
+
+For a complete working example, see [`docs/ADDING_FEATURES.md`](docs/ADDING_FEATURES.md).
+
+---
+
+## 5. Authentication Endpoints
+
+The template includes these authentication endpoints:
+
+| Method | Endpoint | Purpose |
+|---|---|---|
+| POST | `/api/auth/register` | Create an account |
+| POST | `/api/auth/login` | Sign in and receive tokens |
+| POST | `/api/auth/refresh` | Refresh tokens |
+| POST | `/api/auth/logout` | Revoke a refresh token |
+| GET | `/api/auth/me` | Get the current user |
+
+Most endpoints require authentication by default. Registration, login, refresh, logout, and health checks are configured as exceptions.
+
+Use `requests.http` to test the authentication flow.
+
+**Note:** Swagger's Authorize button is not configured for the current authentication flow. See `docs/package-decisions.md` for details.
+
+---
+
+## 6. Security Basics
+
+Before deploying the API:
+
+- **JWT key:** Configure a strong signing key using environment variables or a secret store. Never commit secrets.
+- **Database:** Use a production-ready SQL Server connection string and restrict database access.
+- **CORS:** Add only the frontend origins that should access your API.
+- **Authorization:** Apply the correct authorization policies to protected endpoints.
+- **Admin account:** Configure the optional admin seed credentials securely.
+- **Database migrations:** Run production migrations through your deployment process rather than automatically at application startup.
+- **Reverse proxy:** Configure trusted forwarded headers if deploying behind a proxy or load balancer.
+- **Rate limiting:** Review the limits for general requests and authentication endpoints.
+
+See [`docs/SECURITY.md`](docs/SECURITY.md) for the full configuration and deployment checklist.
+
+---
+
+## 7. Configuration
+
+The application uses configuration settings to control its behavior.
+
+| Setting | Purpose |
+|---|---|
+| `ConnectionStrings:DefaultConnection` | SQL Server connection |
+| `Jwt:Key` | JWT signing key |
+| `Jwt:Issuer` | Token issuer |
+| `Jwt:Audience` | Intended token audience |
+| `Jwt:AccessTokenMinutes` | Access token lifetime |
+| `Jwt:RefreshTokenDays` | Refresh token lifetime |
+| `Cors:AllowedOrigins` | Allowed frontend origins |
+| `RateLimiting:*` | Request rate limits |
+| `Database:MigrateOnStartup` | Apply migrations on startup |
+| `Database:SeedOnStartup` | Seed roles and optional admin |
+| `Seed:AdminEmail` | Optional admin email |
+| `Seed:AdminPassword` | Optional admin password |
+
+For exact defaults, environment variable names, and examples, see [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md).
+
+---
+
+## 8. Run Tests and Check Dependencies
+
+Restore packages:
 
 ```bash
 dotnet restore StarterKit.slnx
+```
+
+Build the solution:
+
+```bash
 dotnet build StarterKit.slnx --no-restore
+```
+
+Run tests:
+
+```bash
 dotnet test StarterKit.slnx --no-build
+```
+
+Check vulnerable packages:
+
+```bash
 dotnet list StarterKit.slnx package --vulnerable --include-transitive
+```
+
+Check for package updates:
+
+```bash
 dotnet list StarterKit.slnx package --outdated
 ```
 
-In CI set `CI=true` so warnings become errors. The integration tests use **in-memory SQLite**, which is not SQL Server;
-add Testcontainers.MsSql when you depend on SQL Server specific behaviour.
+The integration tests use in-memory SQLite, which does not reproduce every SQL Server behavior. Add SQL Server-backed integration tests when your features depend on SQL Server-specific behavior.
 
-## Configuration
+---
 
-| Key | Default | Notes |
-|---|---|---|
-| `ConnectionStrings:DefaultConnection` | empty (LocalDB in Development) | `ConnectionStrings__DefaultConnection` in production |
-| `Jwt:Key` | **none (required, >= 32 chars)** | user-secrets locally, `Jwt__Key` in production |
-| `Jwt:Issuer` / `Jwt:Audience` | `StarterKit` / `StarterKit.Clients` | change per product |
-| `Jwt:AccessTokenMinutes` / `Jwt:RefreshTokenDays` | 15 / 7 | |
-| `Cors:AllowedOrigins` | empty | nothing allowed by default |
-| `RateLimiting:GlobalPermitLimit` / `GlobalWindowSeconds` | 100 / 60 | per IP |
-| `RateLimiting:AuthPermitLimit` / `AuthWindowSeconds` | 10 / 60 | per IP, auth endpoints |
-| `Database:MigrateOnStartup` | false (true in Development) | |
-| `Database:SeedOnStartup` | false (true in Development) | creates roles, optional admin |
-| `Seed:AdminEmail` / `Seed:AdminPassword` | empty | both required to seed an admin |
-| `Serilog:*` | console, Information | standard Serilog configuration |
+## 9. Documentation
+
+| Document | What you'll find |
+|---|---|
+| `docs/GETTING_STARTED.md` | Detailed installation and setup |
+| `docs/ADDING_FEATURES.md` | Complete feature implementation example |
+| `docs/SECURITY.md` | Security configuration and deployment checklist |
+| `docs/CONFIGURATION.md` | All settings, defaults, and environment variables |
+| `docs/package-decisions.md` | NuGet package choices and rationale |
+
+---
+
+## Before Using This Template in Production
+
+This template provides a starting point, not a guarantee of production readiness.
+
+Build the solution, run the tests, verify the database configuration, review authentication and authorization, and complete the deployment security checklist before using it in a real application.
